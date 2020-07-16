@@ -5,6 +5,7 @@
 {-# LANGUAGE QuasiQuotes               #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE TemplateHaskell           #-}
+{-# OPTIONS_GHC -fdefer-type-errors    #-}
 
 {- |This module provides types and functions for type-safe generation of PassBook's @pass.json@ files.
 
@@ -51,7 +52,7 @@ import           Data.Text              (Text, pack, unpack)
 import qualified Data.Text.Lazy         as LT
 import           Data.Time
 import           Data.Typeable
-import           System.Locale
+import           System.Locale          hiding (iso8601DateFormat, timeFmt, defaultTimeLocale)
 import           Text.Shakespeare.Text
 
 -- | Auxiliary type to ensure that field values are rendered correctly
@@ -102,11 +103,11 @@ data Alignment = LeftAlign
     deriving (Eq, Ord, Show, Read, Typeable)
 
 -- |Pass field date/time display style
-data DateTimeStyle = None -- ^ Corresponds to @NSDateFormatterNoStyle@
-                   | Short -- ^ Corresponds to @NSDateFormatterShortStyle@
-                   | Medium -- ^ Corresponds to @NSDateFormatterMediumStyle@
-                   | Long -- ^ Corresponds to @NSDateFormatterLongStyle@
-                   | Full -- ^ Corresponds to @NSDateFormatterFullStyle@
+data DateTimeStyle = None -- ^ Corresponds to @PKDateStyleNone@
+                   | Short -- ^ Corresponds to @PKDateStyleShort@
+                   | Medium -- ^ Corresponds to @PKDateStyleMedium@
+                   | Long -- ^ Corresponds to @PKDateStyleLong@
+                   | Full -- ^ Corresponds to @PKDateStyleFull@
     deriving (Eq, Ord, Show, Read, Typeable)
 
 -- |Pass field number display style
@@ -169,7 +170,9 @@ data PassContent = PassContent {
 -- |A complete pass
 data Pass = Pass {
     -- Required keys
-      description                :: Text -- ^ Brief description of the pass (required)
+      expirationDate :: Maybe Text
+    , voided :: Maybe Bool
+    , description                :: Text -- ^ Brief description of the pass (required)
     , organizationName           :: Text -- ^ Display name of the organization that signed the pass (required)
     , passTypeIdentifier         :: Text -- ^ Pass type identifier, as issued by Apple (required)
     , serialNumber               :: Text -- ^ Unique serial number for the pass (required)
@@ -212,7 +215,7 @@ instance ToJSON Manifest where
 (-:) _ Nothing = id
 (-:) key (Just value) = ((key .= value) :)
 
-$(deriveToJSON id ''PassContent)
+$(deriveToJSON defaultOptions ''PassContent)
 
 instance ToJSON Location where
     toJSON Location{..} =
@@ -248,6 +251,8 @@ instance ToJSON Pass where
     toJSON Pass{..} =
       let pairs =   ("relevantDate" -: relevantDate)
                   $ ("barcode" -: barcode)
+                  $ ("expirationDate" -: expirationDate)
+                  $ ("voided" -: voided)
                   $ ("backgroundColor" -: backgroundColor)
                   $ ("foregroundColor" -: foregroundColor)
                   $ ("labelColor" -: labelColor)
@@ -313,11 +318,11 @@ instance ToJSON Alignment where
     toJSON Natural    = toJSON ("PKTextAlignment" :: Text)
 
 instance ToJSON DateTimeStyle where
-    toJSON None    = toJSON ("NSDateFormatterNoStyle" :: Text)
-    toJSON Short   = toJSON ("NSDateFormatterShortStyle" :: Text)
-    toJSON Medium  = toJSON ("NSDateFormatterMediumStyle" :: Text)
-    toJSON Long    = toJSON ("NSDateFormatterLongStyle" :: Text)
-    toJSON Full    = toJSON ("NSDateFormatterFullStyle" :: Text)
+    toJSON None    = toJSON ("PKDateStyleNone" :: Text)
+    toJSON Short   = toJSON ("PKDateStyleShort" :: Text)
+    toJSON Medium  = toJSON ("PKDateStyleMedium" :: Text)
+    toJSON Long    = toJSON ("PKDateStyleLong" :: Text)
+    toJSON Full    = toJSON ("PKDateStyleFull" :: Text)
 
 instance ToJSON NumberStyle where
     toJSON Decimal    = toJSON ("PKNumberStyleDecimal" :: Text)
@@ -365,11 +370,11 @@ instance FromJSON Alignment where
 
 instance FromJSON DateTimeStyle where
     parseJSON (String t) = case t of
-        "NSDateFormatterNoStyle" -> pure None
-        "NSDateFormatterShortStyle" -> pure Short
-        "NSDateFormatterMediumStyle" -> pure Medium
-        "NSDateFormatterLongStyle" -> pure Long
-        "NSDateFormatterFullStyle" -> pure Full
+        "PKDateStyleNone" -> pure None
+        "PKDateStyleShort" -> pure Short
+        "PKDateStyleMedium" -> pure Medium
+        "PKDateStyleLong" -> pure Long
+        "PKDateStyleFull" -> pure Full
         _ -> fail "Could not parse date formatting style"
     parseJSON _ = mzero
 
@@ -445,7 +450,7 @@ instance FromJSON RelevantDate where
         Nothing  -> fail "Could not parse relevant date"
     parseJSON _ = mzero
 
-$(deriveFromJSON id ''PassContent)
+$(deriveFromJSON defaultOptions ''PassContent)
 
 -- |Tries to parse a web service
 parseWebService :: Maybe Text -> Maybe Text -> Maybe WebService

@@ -1,5 +1,6 @@
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PackageImports       #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 
@@ -64,7 +65,8 @@ import qualified Data.ByteString.Lazy      as LB
 import           Data.Char                 (intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary       hiding (sinkFile)
-import           Data.Conduit.Filesystem
+import           "filesystem-conduit" Data.Conduit.Filesystem
+import           Control.Monad.Trans.Resource
 import qualified Data.Text                 as ST
 import           Data.Text.Lazy            (Text)
 import qualified Data.Text.Lazy            as LT
@@ -142,31 +144,32 @@ signpassWithId passId passIn passOut pass = shelly $ do
     let tmp = passOut </> passId
         lazyId = LT.fromStrict passId
     cp_r passIn tmp
-    liftIO $ renderPass (tmp </> "pass.json") pass { serialNumber = passId }
+    liftIO $ renderPass (tmp </> ("pass.json" :: FilePath)) pass { serialNumber = passId }
     signcmd lazyId tmp passOut
     rm_rf tmp
-    return (passOut </> LT.append lazyId ".pkpass")
+    return (passOut </> LT.unpack (LT.append lazyId ".pkpass"))
 
 -- |Helper function to generate a hash
 genHash :: FilePath -> Sh (Text, Text)
 genHash file = do
     rawhash <- run "openssl" ["sha1", toTextIgnore file]
-    let hash = LT.drop 1 $ LT.dropWhile (/= ' ') rawhash
-    return (toTextIgnore $ filename file, LT.filter (/= '\n') hash)
+    let hash = LT.drop 1 $ LT.dropWhile (/= ' ') (LT.fromStrict rawhash)
+    return (LT.fromStrict (toTextIgnore $ filename file), LT.filter (/= '\n') hash)
 
 -- |Render JSON and put it in a file
 saveJSON :: ToJSON a => a -> FilePath -> IO ()
-saveJSON json path = LB.writeFile (LT.unpack $ toTextIgnore path) $ encode json
+saveJSON json path = LB.writeFile (ST.unpack $ toTextIgnore path) $ encode json
 
 -- |Helper function to sign the manifest
 sslSign :: FilePath -- ^ Certificate
         -> FilePath -- ^ Key
         -> FilePath -- ^ Temporary directory containing manifest.json
-        -> Sh Text
+        -> Sh ST.Text
 sslSign cert key  tmp =
     run "openssl" [ "smime", "-binary"
                   , "-sign"
                   , "-signer", toTextIgnore cert
+                  , "-certfile", "../../../wwdr.pem"
                   , "-inkey" , toTextIgnore key
                   , "-in", "manifest.json"
                   , "-out", "signature"
@@ -233,15 +236,15 @@ signOpenWithId passIn passOut cert key pass passId = shelly $ silently $ do
     let tmp = passOut </> passId
         passFile = LT.append (LT.fromStrict $ passId) ".pkpass"
     cp_r passIn tmp
-    liftIO $ renderPass (tmp </> "pass.json") (pass { serialNumber = passId })
+    liftIO $ renderPass (tmp </> ("pass.json" :: LT.Text)) (pass { serialNumber = passId })
     cd tmp
     manifest <- liftM Manifest $ pwd >>= ls >>= mapM genHash
-    liftIO $ saveJSON manifest (tmp </> "manifest.json")
+    liftIO $ saveJSON manifest (tmp </> ("manifest.json" :: FilePath))
     sslSign cert key tmp
     files <- liftM (map (toTextIgnore . filename)) $ ls =<< pwd
-    run "zip" ((toTextIgnore $ passOut </> passFile) : files)
+    run "zip" ((toTextIgnore $ passOut </> (LT.unpack passFile)) : files)
     rm_rf tmp
-    return (passOut </> passFile)
+    return (passOut </> (LT.unpack passFile))
 
 -- |Generates a random UUID for a Pass using "Data.UUID" and "System.Random"
 genPassId :: IO ST.Text
@@ -276,7 +279,7 @@ signcmd :: Text -- ^ The pass identifier / serial number to uniquely identify th
         -> Sh ()
 signcmd uuid assetFolder passOut =
     run_ "signpass" [ "-p", toTextIgnore assetFolder -- The input folder
-                    , "-o", toTextIgnore $ passOut </> LT.append uuid ".pkpass" ] -- Name of the output file
+                    , "-o", toTextIgnore $ passOut </> LT.unpack (LT.append uuid ".pkpass") ] -- Name of the output file
 
 -- |Tries to parse the pass.json file contained in a .pkpass into a valid
 --  'Pass'. If Passbook accepts the .pkpass file, this function should never
