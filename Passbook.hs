@@ -144,7 +144,7 @@ signpassWithId passId passIn passOut pass = shelly $ do
     let tmp = passOut </> passId
         lazyId = LT.fromStrict passId
     cp_r passIn tmp
-    liftIO $ renderPass (tmp </> ("pass.json" :: FilePath)) pass { serialNumber = passId }
+    liftIO $ renderPass (tmp </> ((Shelly.fromText "pass.json") :: FilePath)) pass { serialNumber = passId }
     signcmd lazyId tmp passOut
     rm_rf tmp
     return (passOut </> LT.unpack (LT.append lazyId ".pkpass"))
@@ -169,7 +169,7 @@ sslSign cert key  tmp =
     run "openssl" [ "smime", "-binary"
                   , "-sign"
                   , "-signer", toTextIgnore cert
-                  , "-certfile", "../../../wwdr.pem"
+                  , "-certfile", "wwdr.pem"
                   , "-inkey" , toTextIgnore key
                   , "-in", "manifest.json"
                   , "-out", "signature"
@@ -236,7 +236,7 @@ signOpenWithId passIn passOut cert key pass passId = shelly $ silently $ do
     let tmp = passOut </> passId
         passFile = LT.append (LT.fromStrict $ passId) ".pkpass"
     cp_r passIn tmp
-    liftIO $ renderPass (tmp </> ("pass.json" :: LT.Text)) (pass { serialNumber = passId })
+    liftIO $ renderPass (tmp </> Shelly.fromText ("pass.json" :: ST.Text)) (pass { serialNumber = passId })
     cd tmp
     manifest <- liftM Manifest $ pwd >>= ls >>= mapM genHash
     liftIO $ saveJSON manifest (tmp </> ("manifest.json" :: FilePath))
