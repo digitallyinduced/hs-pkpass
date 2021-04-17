@@ -72,9 +72,10 @@ import           Data.Text.Lazy            (Text)
 import qualified Data.Text.Lazy            as LT
 import           Data.UUID
 import           Filesystem.Path           (filename)
-import           Filesystem.Path.CurrentOS (encodeString)
+import           Filesystem.Path.CurrentOS (encodeString, decodeString)
 import           Passbook.Types
 import           Prelude                   hiding (FilePath)
+import           Shelly (FilePath)
 import           Shelly
 import           System.Directory          (doesFileExist)
 import           System.Random
@@ -154,7 +155,7 @@ genHash :: FilePath -> Sh (Text, Text)
 genHash file = do
     rawhash <- run "openssl" ["sha1", toTextIgnore file]
     let hash = LT.drop 1 $ LT.dropWhile (/= ' ') (LT.fromStrict rawhash)
-    return (LT.fromStrict (toTextIgnore $ filename file), LT.filter (/= '\n') hash)
+    return (LT.fromStrict (toTextIgnore $ encodeString $ filename (decodeString file)), LT.filter (/= '\n') hash)
 
 -- |Render JSON and put it in a file
 saveJSON :: ToJSON a => a -> FilePath -> IO ()
@@ -241,7 +242,7 @@ signOpenWithId passIn passOut cert key pass passId = shelly $ silently $ do
     manifest <- liftM Manifest $ pwd >>= ls >>= mapM genHash
     liftIO $ saveJSON manifest (tmp </> ("manifest.json" :: FilePath))
     sslSign cert key tmp
-    files <- liftM (map (toTextIgnore . filename)) $ ls =<< pwd
+    files <- liftM (map (\f -> toTextIgnore (encodeString $ filename (decodeString f)))) $ ls =<< pwd
     run "zip" ((toTextIgnore $ passOut </> (LT.unpack passFile)) : files)
     rm_rf tmp
     return (passOut </> (LT.unpack passFile))
@@ -270,7 +271,7 @@ showPassId uuid = let (w0, w1, w2, w3) = toWords uuid
 renderPass :: FilePath -> Pass -> IO ()
 renderPass path pass =
     let rendered = sourceLbs $ encode pass
-    in runResourceT $ rendered $$ sinkFile path
+    in runResourceT $ rendered $$ sinkFile (decodeString path)
 
 -- |Call the signpass tool.
 signcmd :: Text -- ^ The pass identifier / serial number to uniquely identify the pass
@@ -287,7 +288,7 @@ signcmd uuid assetFolder passOut =
 loadPass :: FilePath -- ^ Location of the .pkpass file
          -> IO (Maybe Pass)
 loadPass path = do
-    archive <- liftM toArchive $ LB.readFile $ encodeString path
+    archive <- liftM toArchive $ LB.readFile $ path
     case findEntryByPath "pass.json" archive of
         Nothing   -> return Nothing
         Just pass -> return $ decode $ fromEntry pass
