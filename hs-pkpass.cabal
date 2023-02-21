@@ -29,7 +29,6 @@ library
                        conduit-extra,
                        resourcet,
                        shakespeare,
-                       filesystem-conduit ==0.5.*,
                        text ==0.11.*,
                        uuid ==1.2.*,
                        shelly ==0.14.*,

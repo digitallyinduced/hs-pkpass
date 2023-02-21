@@ -65,7 +65,7 @@ import qualified Data.ByteString.Lazy      as LB
 import           Data.Char                 (intToDigit)
 import           Data.Conduit
 import           Data.Conduit.Binary       hiding (sinkFile)
-import           "filesystem-conduit" Data.Conduit.Filesystem
+import           Data.Conduit.Combinators  (sinkFile)
 import           Control.Monad.Trans.Resource
 import qualified Data.Text                 as ST
 import           Data.Text.Lazy            (Text)
