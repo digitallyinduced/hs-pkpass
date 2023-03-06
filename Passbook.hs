@@ -271,7 +271,7 @@ showPassId uuid = let (w0, w1, w2, w3) = toWords uuid
 renderPass :: FilePath -> Pass -> IO ()
 renderPass path pass =
     let rendered = sourceLbs $ encode pass
-    in runResourceT $ rendered $$ sinkFile (decodeString path)
+    in runResourceT $ rendered $$ sinkFile path
 
 -- |Call the signpass tool.
 signcmd :: Text -- ^ The pass identifier / serial number to uniquely identify the pass
