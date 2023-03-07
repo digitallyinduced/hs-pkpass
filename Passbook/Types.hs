@@ -55,6 +55,7 @@ import           Data.Time
 import           Data.Typeable
 import           System.Locale          hiding (iso8601DateFormat, timeFmt, defaultTimeLocale)
 import           Text.Shakespeare.Text
+import           Data.Scientific (floatingOrInteger)
 
 -- | Auxiliary type to ensure that field values are rendered correctly
 data PassValue = PassInt Integer
@@ -205,7 +206,7 @@ data Manifest = Manifest [(LT.Text, LT.Text)] -- ^ (Filename, Hash)
 
 instance ToJSON Manifest where
     toJSON (Manifest files) =
-      let pairs = map (\(f, h) -> LT.toStrict f .= h) files
+      let pairs = map (\(f, h) -> (fromString $ unpack $ LT.toStrict f) .= h) files
       in object pairs
 
 -- * JSON instances
@@ -214,7 +215,7 @@ instance ToJSON Manifest where
 --  because Passbook can't deal with null values in JSON.
 (-:) :: ToJSON a => Text -> Maybe a -> [Pair] -> [Pair]
 (-:) _ Nothing = id
-(-:) key (Just value) = ((key .= value) :)
+(-:) key (Just value) = (((fromString $ unpack $ key) .= value) :)
 
 $(deriveToJSON defaultOptions ''PassContent)
 
@@ -356,7 +357,7 @@ jsonPassdate = toJSON . formatTime defaultTimeLocale timeFormat
 
 -- |Helper function that parses a 'UTCTime' out of a Text
 parseJsonDate :: Text -> Maybe UTCTime
-parseJsonDate = parseTime defaultTimeLocale timeFormat . unpack
+parseJsonDate = parseTimeM True defaultTimeLocale timeFormat . unpack
 
 -- * Implementing FromJSON
 
@@ -423,8 +424,9 @@ instance FromJSON Barcode where
     parseJSON _ = mzero
 
 instance FromJSON PassValue where
-    parseJSON (Number (I i)) = pure $ PassInt i
-    parseJSON (Number (D d)) = pure $ PassDouble d
+    parseJSON (Number num) = case floatingOrInteger num of
+        Left d -> pure $ PassDouble d
+        Right i -> pure $ PassInt i
     parseJSON (String t) = case parseJsonDate t of
         Just d  -> pure $ PassDate d
         Nothing -> pure $ PassText t

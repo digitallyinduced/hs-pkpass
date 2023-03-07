@@ -42,4 +42,5 @@ library
                        system-filepath < 0.5,
                        bytestring,
                        transformers >= 0.3,
-                       binary >= 0.5
+                       binary >= 0.5,
+                       scientific
