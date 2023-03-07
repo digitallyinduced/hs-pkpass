@@ -50,6 +50,7 @@ import           Data.Attoparsec.Text
 import qualified Data.HashMap.Strict    as HM
 import           Data.Text              (Text, pack, unpack)
 import qualified Data.Text.Lazy         as LT
+import           Data.String            (fromString)
 import           Data.Time
 import           Data.Typeable
 import           System.Locale          hiding (iso8601DateFormat, timeFmt, defaultTimeLocale)
@@ -268,7 +269,7 @@ instance ToJSON Pass where
                     , "teamIdentifier" .= teamIdentifier
                     , "associatedStoreIdentifiers" .= associatedStoreIdentifiers
                     , "locations" .= locations
-                    , passTypeName passContent .= passContent]
+                    , (fromString $ unpack $ passTypeName passContent) .= passContent]
       in object pairs
 
 -- |Internal helper function to handle Boarding Passes correctly.
